@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>видео природы</title>
+    
+    <!-- Предзагрузка ресурсов для исключения задержек -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;1,400&family=Montserrat:wght@300;400;500&display=swap" rel="stylesheet">
+    
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: #050404;
+            color: #f4eae1;
+            font-family: 'Montserrat', sans-serif;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            align-items: center;
+            overflow-x: hidden;
+            position: relative;
+        }
+
+        /* ⚔️ ОПТИМИЗИРОВАННЫЙ КОНТЕЙНЕР РАЗРЕЗА (Изолирован для GPU) */
+        .slash-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            z-index: 0;
+            pointer-events: none;
+            overflow: hidden;
+            contain: strict; /* Изоляция перерисовок */
+        }
+
+        /* 🗡️ МЕЧ (С АППАРАТНЫМ УСКОРЕНИЕМ) */
+        .sword-wrapper {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 140vw;
+            height: 120px;
+            transform-origin: center center;
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            will-change: transform, opacity;
+            z-index: 4;
+            transform: translate3d(-50%, -50%, 0) rotate(-35deg) translateX(-100%);
+        }
+
+        .sword-img {
+            height: 100%;
+            width: auto;
+            object-fit: contain;
+            filter: drop-shadow(0 0 15px rgba(255, 255, 255, 0.9)) 
+                    drop-shadow(0 0 35px rgba(212, 131, 75, 0.85));
+        }
+
+        /* ⚡ СВЕТЯЩИЙСЯ СЛЕД РАЗРЕЗА */
+        .slash-line {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 250vw;
+            height: 3px;
+            background: linear-gradient(90deg, 
+                transparent 0%, 
+                #ffffff 48%, 
+                #ffc285 50%, 
+                #d4834b 52%, 
+                transparent 100%);
+            box-shadow: 
+                0 0 12px #ffffff,
+                0 0 30px #d4834b,
+                0 0 50px rgba(255, 102, 0, 0.8);
+            transform-origin: center center;
+            opacity: 0;
+            will-change: transform, opacity;
+            z-index: 3;
+            transform: translate3d(-50%, -50%, 0) rotate(-35deg) scaleX(0);
+        }
+
+        /* 🖼️ ПОЛОВИНКИ ФОНА */
+        .bg-part {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background-image: url('background.jpg');
+            background-size: cover;
+            background-position: center;
+            background-repeat: no-repeat;
+            filter: brightness(0.45) blur(3px);
+            will-change: transform;
+        }
+
+        .bg-top {
+            clip-path: polygon(-10% -10%, 110% -10%, 110% 25%, -10% 75%);
+            z-index: 1;
+        }
+
+        .bg-bottom {
+            clip-path: polygon(-10% 75%, 110% 25%, 110% 110%, -10% 110%);
+            z-index: 1;
+        }
+
+        /* ✨ ЦЕНТРИРОВАННОЕ СВЕЧЕНИЕ СЛОЯ */
+        .ambient-glow {
+            position: fixed;
+            top: 50vh;
+            left: 50vw;
+            transform: translate3d(-50%, -50%, 0);
+            width: 70vw;
+            height: 70vw;
+            max-width: 800px;
+            max-height: 800px;
+            background: radial-gradient(circle, 
+                rgba(212, 131, 75, 0.28) 0%, 
+                rgba(180, 85, 30, 0.12) 40%, 
+                rgba(0, 0, 0, 0) 70%);
+            z-index: 1;
+            pointer-events: none;
+            border-radius: 50%;
+            filter: blur(80px);
+            contain: strict;
+        }
+
+        header {
+            position: relative;
+            z-index: 10;
+            padding: 40px 20px 20px;
+            text-align: center;
+        }
+
+        .brand-subtitle {
+            font-size: 0.85rem;
+            letter-spacing: 4px;
+            text-transform: uppercase;
+            color: #d4834b;
+            font-weight: 500;
+            margin-bottom: 8px;
+        }
+
+        main {
+            position: relative;
+            z-index: 10;
+            width: 100%;
+            max-width: 960px;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        /* Главная карточка */
+        .video-card-main {
+            position: relative;
+            width: 100%;
+            background: rgba(13, 11, 10, 0.45);
+            border: 1px solid rgba(212, 131, 75, 0.3);
+            border-radius: 24px;
+            padding: 16px;
+            backdrop-filter: blur(25px);
+            -webkit-backdrop-filter: blur(25px);
+            box-shadow: 
+                0 30px 60px rgba(0, 0, 0, 0.7),
+                inset 0 1px 0 rgba(255, 255, 255, 0.15);
+            transition: transform 0.4s cubic-bezier(0.2, 0.8, 0.2, 1), border-color 0.4s ease;
+        }
+
+        .video-card-main:hover {
+            border-color: rgba(212, 131, 75, 0.6);
+            transform: translate3d(0, -4px, 0);
+        }
+
+        .video-wrapper {
+            position: relative;
+            width: 100%;
+            border-radius: 16px;
+            overflow: hidden;
+            background: #000;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+        }
+
+        video {
+            display: block;
+            width: 100%;
+            height: auto;
+            border-radius: 16px;
+            outline: none;
+        }
+
+        /* 💧 ЭФФЕКТ ВОДНОГО СТЕКЛА ДЛЯ ТЕКСТА */
+        .caption-section {
+            margin-top: 35px;
+            margin-bottom: 50px;
+            text-align: center;
+            max-width: 760px;
+            width: 100%;
+            padding: 24px 36px;
+            border-radius: 28px;
+            
+            background: rgba(255, 255, 255, 0.07);
+            backdrop-filter: blur(16px) saturate(180%);
+            -webkit-backdrop-filter: blur(16px) saturate(180%);
+            
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            border-top: 1px solid rgba(255, 255, 255, 0.6);
+            border-left: 1px solid rgba(255, 255, 255, 0.5);
+            
+            box-shadow: 
+                0 20px 40px rgba(0, 0, 0, 0.4),
+                inset 0 2px 4px rgba(255, 255, 255, 0.4),
+                inset 0 -2px 4px rgba(0, 0, 0, 0.3);
+            
+            transition: all 0.4s ease;
+        }
+
+        .caption-section:hover {
+            background: rgba(255, 255, 255, 0.12);
+            border-color: rgba(212, 131, 75, 0.6);
+            box-shadow: 
+                0 25px 50px rgba(212, 131, 75, 0.2),
+                inset 0 3px 6px rgba(255, 255, 255, 0.6),
+                inset 0 -3px 6px rgba(0, 0, 0, 0.4);
+        }
+
+        .quote-icon {
+            font-family: 'Cormorant Garamond', serif;
+            font-size: 3rem;
+            line-height: 1;
+            color: #d4834b;
+            opacity: 0.8;
+            margin-bottom: -10px;
+            text-shadow: 0 2px 10px rgba(212, 131, 75, 0.4);
+        }
+
+        .caption-text {
+            font-family: 'Cormorant Garamond', serif;
+            font-size: 2.5rem;
+            font-weight: 600;
+            font-style: italic;
+            line-height: 1.3;
+            background: linear-gradient(135deg, 
+                rgba(255, 255, 255, 0.95) 0%, 
+                rgba(226, 185, 136, 0.85) 40%, 
+                rgba(212, 131, 75, 0.9) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            filter: drop-shadow(0px 4px 8px rgba(0, 0, 0, 0.5));
+            letter-spacing: 0.5px;
+        }
+
+        .divider {
+            width: 70px;
+            height: 2px;
+            background: linear-gradient(90deg, transparent, rgba(212, 131, 75, 0.8), transparent);
+            margin: 18px auto;
+            border-radius: 2px;
+        }
+
+        .sub-caption {
+            font-size: 0.85rem;
+            font-weight: 400;
+            color: #e2b988;
+            letter-spacing: 3px;
+            text-transform: uppercase;
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.6);
+        }
+
+        /* 🎬 СЕТКА Галереи */
+        .gallery-title {
+            font-size: 0.9rem;
+            letter-spacing: 3px;
+            text-transform: uppercase;
+            color: #e2b988;
+            margin-bottom: 20px;
+            text-align: center;
+            opacity: 0.9;
+        }
+
+        .video-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 20px;
+            width: 100%;
+        }
+
+        .gallery-card {
+            background: rgba(13, 11, 10, 0.35);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 18px;
+            padding: 10px;
+            backdrop-filter: blur(15px);
+            -webkit-backdrop-filter: blur(15px);
+            transition: all 0.3s ease;
+        }
+
+        .gallery-card:hover {
+            border-color: rgba(212, 131, 75, 0.5);
+            transform: translate3d(0, -4px, 0);
+            box-shadow: 0 15px 30px rgba(0,0,0,0.5);
+        }
+
+        footer {
+            position: relative;
+            z-index: 10;
+            padding: 30px 20px;
+            text-align: center;
+            font-size: 0.8rem;
+            color: #a39589;
+        }
+
+        @media (max-width: 768px) {
+            .caption-text { font-size: 1.8rem; }
+            .caption-section { padding: 18px 20px; }
+            .brand-subtitle { font-size: 0.75rem; }
+            .video-grid { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- ⚔️ КОНТЕЙНЕР ДЛЯ РАЗРЕЗА -->
+    <div class="slash-container">
+        <div class="bg-part bg-top" id="bgTop"></div>
+        <div class="bg-part bg-bottom" id="bgBottom"></div>
+        <div class="slash-line" id="slashLine"></div>
+
+        <div class="sword-wrapper" id="swordWrapper">
+            <img class="sword-img" src=p.png alt="Sword" loading="eager">
+        </div>
+    </div>
+
+    <div class="ambient-glow"></div>
+
+    <header>
+        <div class="brand-subtitle">Фото природы</div>
+    </header>
+
+    <main>
+        <!-- 1. Главное видео -->
+        <div class="video-card-main">
+            <div class="video-wrapper">
+                <video controls autoplay loop muted playsinline>
+                    <source src="2801.mp4" type="video/mp4">
+                    <source src="video.mp4" type="video/mp4">
+                    Ваш браузер не поддерживает видео.
+                </video>
+            </div>
+        </div>
+
+        <!-- 2. Обновленный заголовок -->
+        <div class="caption-section">
+            <div class="quote-icon">“</div>
+            <h1 class="caption-text">Фото природы</h1>
+            <div class="divider"></div>
+            <p class="sub-caption">Вечерняя гармония & Эстетика</p>
+        </div>
+
+        <!-- 3. Галерея -->
+        <div class="gallery-title">Ещё видео</div>
+        
+        <div class="video-grid">
+            <div class="gallery-card">
+                <div class="video-wrapper">
+                    <video controls loop muted playsinline>
+                        <source src="video2.mp4" type="video/mp4">
+                    </video>
+                </div>
+            </div>
+
+            <div class="gallery-card">
+                <div class="video-wrapper">
+                    <video controls loop muted playsinline>
+                        <source src="video3.mp4" type="video/mp4">
+                    </video>
+                </div>
+            </div>
+
+            <div class="gallery-card">
+                <div class="video-wrapper">
+                    <video controls loop muted playsinline>
+                        <source src="video4.mp4" type="video/mp4">
+                    </video>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <footer>
+        &copy; Фото природы — Атмосферная эстетика
+    </footer>
+
+    <!-- ⚡ УЛУЧШЕННЫЙ И ВЫСОКОПРОИЗВОДИТЕЛЬНЫЙ СКРИПТ -->
+    <script>
+        const bgTop = document.getElementById('bgTop');
+        const bgBottom = document.getElementById('bgBottom');
+        const slashLine = document.getElementById('slashLine');
+        const swordWrapper = document.getElementById('swordWrapper');
+
+        let targetScroll = 0;
+        let currentScroll = 0;
+        let isTicking = false;
+
+        // Расчет позиции при скролле
+        function onScroll() {
+            const maxScroll = document.documentElement.scrollHeight - window.innerHeight;
+            if (maxScroll > 0) {
+                targetScroll = Math.min(Math.max(window.scrollY / maxScroll, 0), 1);
+            }
+            if (!isTicking) {
+                requestAnimationFrame(updateAnimation);
+                isTicking = true;
+            }
+        }
+
+        // Высокоскоростной цикл интерполяции на GPU
+        function updateAnimation() {
+            currentScroll += (targetScroll - currentScroll) * 0.09;
+
+            // Позиция меча
+            const swordMove = -100 + (currentScroll * 250); 
+            swordWrapper.style.transform = `translate3d(-50%, -50%, 0) rotate(-35deg) translateX(${swordMove}%)`;
+            swordWrapper.style.opacity = (currentScroll > 0.005 && currentScroll < 0.98) ? '1' : '0';
+
+            // Светящаяся линия
+            const lineProgress = Math.min(currentScroll * 2.2, 1);
+            slashLine.style.transform = `translate3d(-50%, -50%, 0) rotate(-35deg) scaleX(${lineProgress})`;
+            slashLine.style.opacity = currentScroll > 0.005 ? (1 - currentScroll * 0.3) : 0;
+
+            // Раздвижение частей фона
+            const offset = currentScroll * 38;
+            bgTop.style.transform = `translate3d(${-offset}px, ${-offset}px, 0)`;
+            bgBottom.style.transform = `translate3d(${offset}px, ${offset}px, 0)`;
+
+            // Продолжаем анимацию до полного сглаживания
+            if (Math.abs(targetScroll - currentScroll) > 0.0001) {
+                requestAnimationFrame(updateAnimation);
+            } else {
+                isTicking = false;
+            }
+        }
+
+        window.addEventListener('scroll', onScroll, { passive: true });
+        // Инициализация при старте
+        onScroll();
+    </script>
+
+</body>
+</html>
+
